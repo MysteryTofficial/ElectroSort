@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ElectroSort - Component Label Generator</title>
+  <meta name="description" content="Generate printable component labels with schematic symbols, specs and datasheet QR codes.">
+  <meta name="theme-color" content="#0d1117">
+  <meta name="color-scheme" content="dark">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <meta name="referrer" content="no-referrer">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- QRCode.js Library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <!-- html2canvas and jsPDF for direct PDF export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0fdf4',
+              100: '#dcfce7',
+              500: '#22c55e',
+              600: '#16a34a',
+              700: '#15803d',
+              800: '#166534',
+              900: '#14532d',
+              dark: '#0d1117',
+              card: '#161b22',
+              border: '#30363d'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+
+    body {
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+      background-color: #0d1117;
+      color: #c9d1d9;
+    }
+
+    .font-mono {
+      font-family: ui-monospace, 'Cascadia Mono', Consolas, Menlo, monospace;
+    }
+
+    /* Off-screen Render Container for PDF Capture */
+    #pdf-render-area {
+      position: absolute;
+      left: -99999px;
+      top: -99999px;
+      width: 210mm;
+      min-height: 297mm;
+      background: #ffffff;
+      color: #000000;
+      padding: 0;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+
+    /* Printable Label Block */
+    .printable-label {
+      border: 1.5px solid #000;
+      border-radius: 4px;
+      padding: 3.5mm 4mm;
+      background: #ffffff;
+      color: #000000;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+      page-break-inside: avoid;
+    }
+
+    .printable-label .label-header {
+      border-bottom: 1.5px solid #000;
+      padding-bottom: 1.2mm;
+      margin-bottom: 1.2mm;
+    }
+
+    .printable-label .label-title {
+      font-weight: 800;
+      line-height: 1.1;
+      color: #000;
+      word-break: break-word;
+    }
+
+    .printable-label .label-category {
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #333;
+      margin-top: 0.5mm;
+    }
+
+    .printable-label .label-specs {
+      font-family: ui-monospace, 'Cascadia Mono', Consolas, Menlo, monospace;
+      line-height: 1.25;
+      color: #111;
+      white-space: pre-line;
+      flex: 0 0 auto;
+      overflow: hidden;
+      word-break: break-word;
+      padding-bottom: 1mm;
+    }
+
+    .printable-label .sym-wrap {
+      flex: 1 1 auto;
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1mm 0;
+      overflow: hidden;
+    }
+
+    .printable-label .sym-wrap svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .printable-label .label-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-top: 1px solid #666;
+      padding-top: 1.5mm;
+      margin-top: auto;
+      gap: 2mm;
+      flex: 0 0 auto;
+    }
+
+    .printable-label .label-footer-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .printable-label img, .printable-label canvas {
+      display: block;
+    }
+
+    /* Scrollbar Styling */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0d1117;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #30363d;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #484f58;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased">
+
+  <!-- TOP HEADER -->
+  <header class="border-b border-brand-border bg-brand-card sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-4">
+
+      <!-- Logo & Title -->
+      <div class="flex items-center gap-3">
+        <div class="bg-brand-600/20 text-brand-500 p-2.5 rounded-xl border border-brand-500/30">
+          <i class="fa-solid fa-microchip text-2xl"></i>
+        </div>
+        <div>
+          <h1 class="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+            ElectroSort
+            <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-600/30 text-brand-500 border border-brand-500/30">v1.1.0</span>
+          </h1>
+          <p class="text-xs text-gray-400">Printable bag labels & organizer for electronics makers | Made by: MysteryT</p>
+        </div>
+      </div>
+
+      <!-- Quick Stats -->
+      <div class="flex items-center gap-4 flex-wrap">
+        <div class="flex items-center gap-3 bg-brand-dark/60 px-3.5 py-1.5 rounded-lg border border-brand-border text-xs">
+          <div class="text-gray-400">Total Components:</div>
+          <div id="stat-total-parts" class="font-bold font-mono text-brand-500 text-sm">0</div>
+        </div>
+        <div class="flex items-center gap-3 bg-brand-dark/60 px-3.5 py-1.5 rounded-lg border border-brand-border text-xs">
+          <div class="text-gray-400">In Print Queue:</div>
+          <div id="stat-queue-items" class="font-bold font-mono text-yellow-400 text-sm">0</div>
+        </div>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT CONTAINER -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+    <!-- COMPONENTS.JSON LOAD WARNING / FALLBACK -->
+    <div id="load-warning" class="hidden lg:col-span-12 bg-amber-500/10 border border-amber-500/40 text-amber-300 text-xs rounded-lg p-3 leading-relaxed">
+      <div class="font-bold mb-1 flex items-center gap-2 text-amber-400">
+        <i class="fa-solid fa-triangle-exclamation text-base"></i> components.json file not loaded automatically
+      </div>
+      <div class="mb-2">
+        If you opened <code>index.html</code> directly as a local file (<code>file://</code>), modern web browsers restrict reading local <code>.json</code> files. Serve the directory via HTTP (e.g. <code>python -m http.server</code>) or pick your <code>components.json</code> file manually below:
+      </div>
+      <button onclick="document.getElementById('json-file-input').click()" class="bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 px-3 py-1.5 rounded font-semibold transition text-amber-200">
+        <i class="fa-solid fa-folder-open"></i> Load components.json Manually
+      </button>
+      <input type="file" id="json-file-input" accept=".json,application/json" class="hidden" onchange="loadJsonFromPicker(event)">
+    </div>
+
+    <!-- LEFT PANEL: LIBRARY & SEARCH (6 Columns) -->
+    <section class="lg:col-span-6 flex flex-col gap-4">
+
+      <!-- Search Bar & Controls -->
+      <div class="bg-brand-card p-4 rounded-xl border border-brand-border shadow-sm space-y-3">
+        <div class="flex flex-col sm:flex-row gap-3">
+          <div class="relative flex-1">
+            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 text-sm"></i>
+            <input
+              type="text"
+              id="search-input"
+              placeholder="Search components (e.g. NE555, 10k, MOSFET, DIP-8)..."
+              class="w-full bg-brand-dark border border-brand-border rounded-lg pl-9 pr-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 transition"
+              oninput="filterComponents()"
+            >
+          </div>
+          <button
+            onclick="openAddModal()"
+            class="bg-brand-600 hover:bg-brand-500 text-white font-medium px-4 py-2 rounded-lg text-sm flex items-center justify-center gap-2 transition shadow-md shadow-brand-600/20 shrink-0"
+          >
+            <i class="fa-solid fa-plus"></i> Add Custom Part
+          </button>
+        </div>
+
+        <!-- Filter Pills -->
+        <div class="flex flex-wrap items-center gap-2 text-xs pt-1" id="category-pills">
+        </div>
+      </div>
+
+      <!-- Component List Grid -->
+      <div id="component-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-4 overflow-y-auto max-h-[calc(100vh-280px)] pr-1">
+        <!-- Dynamic Cards Inserted Here via JS -->
+      </div>
+    </section>
+
+    <!-- MIDDLE PANEL: SYMBOL & UNIT HELPER (3 Columns) -->
+    <section class="lg:col-span-3 flex flex-col gap-4">
+      <div class="bg-brand-card p-4 rounded-xl border border-brand-border shadow-sm flex flex-col h-full space-y-3">
+        <div class="flex items-center justify-between pb-2 border-b border-brand-border">
+          <div class="flex items-center gap-2 text-white font-bold text-xs">
+            <i class="fa-solid fa-icons text-brand-500"></i> Symbol & Unit Toolbox
+          </div>
+          <span class="text-[9px] text-gray-400">Click to copy</span>
+        </div>
+        <p class="text-[10px] text-gray-400">Click any symbol or unit below to instantly copy it to your clipboard for pasting into names or notes.</p>
+
+        <div id="toast-notification" class="hidden bg-brand-600/20 border border-brand-500 text-brand-400 text-[10px] px-2.5 py-1.5 rounded-lg text-center font-medium animate-pulse">
+          Copied to clipboard!
+        </div>
+
+        <div class="flex-1 overflow-y-auto space-y-3 pr-1 text-xs">
+          <!-- Metric Prefixes -->
+          <div>
+            <div class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">SI Prefixes</div>
+            <div class="grid grid-cols-3 gap-1.5">
+              <button onclick="copyToClipboard('µ')" class="bg-brand-dark hover:bg-brand-600/30 border border-brand-border hover:border-brand-500 p-2 rounded text-center transition flex flex-col items-center gap-1 group" title="Micro (µ)">
+                <span class="font-bold text-white text-sm">µ</span>
+                <span class="text-[9px] text-gray-400 group-hover:text-brand-400">Micro</span>
+              </button>
+              <button onclick="copyToClipboard('n')" class="bg-brand-dark hover:bg-brand-600/30 border border-brand-border hover:border-brand-500 p-2 rounded text-center transition flex flex-col items-center gap-1 group" title="Nano (n)">
+                <span class="font-bold text-white text-sm">n</span>
+                <span class="text-[9px] text-gray-400 group-hover:text-brand-400">Nano</span>
+              </button>
+              <button onclick="copyToClipboard('p')" class="bg-brand-dark hover:bg-brand-600/30 border border-brand-border hover:border-brand-500 p-2 rounded text-center transition flex flex-col items-center gap-1 group" title="Pico (p)">
+                <span class="font-bold text-white text-sm">p</span>
+                <span class="text-[9px] text-gray-400 group-hover:text-brand-400">Pico</span>
+              </button>
+              <button onclick="copyToClipboard('m')" class="bg-brand-dark hover:bg-brand-600/30 border border-brand-border hover:border-brand-500 p-2 rounded text-center transition flex flex-col items-center gap-1 group" title="Milli (m)">
+                <span class="font-bold text-white text-sm">m</span>
+                <span class="text-[9px] text-gray-400 group-hover:text-brand-400">Milli</span>
+              </button>
+              <button onclick="copyToClipboard('k')" class="bg-brand-dark hover:bg-brand-600/30 border border-brand-border hover:border-brand-500 p-2 rounded text-center transition flex flex-col items-center gap-1 group" title="Kilo (k)">
+                <span class="font-bold text-white text-sm">k</span>
+                <span class="text-[9px] text-gray-400 group-hover:text-brand-400">Kilo</span>
+              </button>
+              <button onclick="copyToClipboard('M')" class="bg-brand-dark hover:bg-brand-600/30 border border-brand-border hover:border-brand-500 p-2 rounded text-center transition flex flex-col items-center gap-1 group" title="Mega (M)">
+                <span class="font-bold text-white text-sm">M</span>
+                <span class="text-[9px] text-gray-400 group-hover:text-brand-400">Mega</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Electrical Units -->
+          <div>
+            <div class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5">Units & Symbols</div>
+            <div class="grid grid-cols-3 gap-1.5">
+              <button onclick="copyToClipboard('Ω')" class="bg-brand-dark hover:bg-brand-600/30 border border-brand-border hover:border-brand-500 p-2 rounded text-center transition flex flex-col items-center gap-1 group" title="Ohm (Ω)">
+                <span class="font-bold text-white text-sm">Ω</span>
+                <span class="text-[9px] text-gray-400 group-hover:text-brand-400">Ohm</span>
+              </button>
+              <button onclick="copyToClipboard('°')" class="bg-brand-dark hover:bg-brand-600/30 border border-brand-border hover:border-brand-500 p-2 rounded text-center transition flex flex-col items-center gap-1 group" title="Degree (°)">
+                <span class="font-bold text-white text-sm">°</span>
+                <span class="text-[9px] text-gray-400 group-hover:text-brand-400">Degree</span>
+              </button>
+              <button onclick="copyToClipboard('±')" class="bg-brand-dark hover:bg-brand-600/30 border border-brand-border hover:border-brand-500 p-2 rounded text-center transition flex flex-col items-center gap-1 group" title="Plus-Minus (±)">
+                <span class="font-bold text-white text-sm">±</span>
+                <span class="text-[9px] text-gray-400 group-hover:text-brand-400">Tolerance</span>
+              </button>
+              <button onclick="copyToClipboard('V')" class="bg-brand-dark hover:bg-brand-600/30 border border-brand-border hover:border-brand-500 p-2 rounded text-center transition flex flex-col items-center gap-1 group" title="Volt (V)">
+                <span class="font-bold text-white text-sm">V</span>
+                <span class="text-[9px] text-gray-400 group-hover:text-brand-400">Volt</span>
+              </button>
+              <button onclick="copyToClipboard('A')" class="bg-brand-dark hover:bg-brand-600/30 border border-brand-border hover:border-brand-500 p-2 rounded text-center transition flex flex-col items-center gap-1 group" title="Ampere (A)">
+                <span class="font-bold text-white text-sm">A</span>
+                <span class="text-[9px] text-gray-400 group-hover:text-brand-400">Ampere</span>
+              </button>
+              <button onclick="copyToClipboard('W')" class="bg-brand-dark hover:bg-brand-600/30 border border-brand-border hover:border-brand-500 p-2 rounded text-center transition flex flex-col items-center gap-1 group" title="Watt (W)">
+                <span class="font-bold text-white text-sm">W</span>
+                <span class="text-[9px] text-gray-400 group-hover:text-brand-400">Watt</span>
+              </button>
+              <button onclick="copyToClipboard('F')" class="bg-brand-dark hover:bg-brand-600/30 border border-brand-border hover:border-brand-500 p-2 rounded text-center transition flex flex-col items-center gap-1 group" title="Farad (F)">
+                <span class="font-bold text-white text-sm">F</span>
+                <span class="text-[9px] text-gray-400 group-hover:text-brand-400">Farad</span>
+              </button>
+              <button onclick="copyToClipboard('Hz')" class="bg-brand-dark hover:bg-brand-600/30 border border-brand-border hover:border-brand-500 p-2 rounded text-center transition flex flex-col items-center gap-1 group" title="Hertz (Hz)">
+                <span class="font-bold text-white text-sm">Hz</span>
+                <span class="text-[9px] text-gray-400 group-hover:text-brand-400">Hertz</span>
+              </button>
+              <button onclick="copyToClipboard('°C')" class="bg-brand-dark hover:bg-brand-600/30 border border-brand-border hover:border-brand-500 p-2 rounded text-center transition flex flex-col items-center gap-1 group" title="Celsius (°C)">
+                <span class="font-bold text-white text-sm">°C</span>
+                <span class="text-[9px] text-gray-400 group-hover:text-brand-400">Celsius</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT PANEL: PRINT QUEUE & CONTROLS (3 Columns) -->
+    <section class="lg:col-span-3 flex flex-col gap-4">
+      <div class="bg-brand-card p-5 rounded-xl border border-brand-border shadow-sm flex flex-col h-full">
+
+        <div class="flex items-center justify-between pb-4 border-b border-brand-border mb-4">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-file-pdf text-brand-500"></i>
+            <h2 class="text-base font-bold text-white">Print Queue</h2>
+          </div>
+          <button
+            onclick="clearQueue()"
+            class="text-xs text-red-400 hover:text-red-300 transition flex items-center gap-1"
+          >
+            <i class="fa-solid fa-trash-can"></i> Clear
+          </button>
+        </div>
+
+        <!-- Sticker Size Controls -->
+        <div class="mb-4 bg-brand-dark p-3 rounded-lg border border-brand-border space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="text-xs text-white font-semibold flex items-center gap-2">
+              <i class="fa-solid fa-ruler-combined text-brand-500"></i> Sticker Size
+            </label>
+            <select id="sticker-size-select" onchange="updateStickerSize()" class="bg-brand-card border border-brand-border text-xs text-white rounded px-2 py-1 focus:outline-none focus:border-brand-500">
+              <option value="default" selected>Default (62 × 86 mm)</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+          <div id="custom-size-controls" class="hidden grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-[10px] text-gray-400 block mb-1">Width (mm)</label>
+              <input type="number" id="sticker-width" value="62" min="20" max="100" step="1" onchange="updateStickerSize()" class="w-full bg-brand-card border border-brand-border rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-brand-500">
+            </div>
+            <div>
+              <label class="text-[10px] text-gray-400 block mb-1">Height (mm)</label>
+              <input type="number" id="sticker-height" value="86" min="20" max="100" step="1" onchange="updateStickerSize()" class="w-full bg-brand-card border border-brand-border rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-brand-500">
+            </div>
+          </div>
+        </div>
+
+        <!-- Print Queue Items List -->
+        <div id="queue-container" class="flex-1 overflow-y-auto max-h-[300px] space-y-3 pr-1 mb-4">
+          <!-- Queue Cards Inserted Here via JS -->
+        </div>
+
+        <!-- Legal Notice -->
+        <div class="mb-3 bg-brand-dark/60 p-2.5 rounded-lg border border-brand-border text-[10px] text-gray-500 leading-relaxed">
+          Provided "as-is", no warranty. Specs are indicative &ndash; always verify against the official datasheet. Trademarks belong to their owners; no affiliation.
+          <button onclick="openLegal()" class="text-brand-500 hover:text-brand-400 underline ml-1">Legal &amp; Privacy</button>
+        </div>
+
+        <!-- Export Action Trigger -->
+        <div class="pt-3 border-t border-brand-border mt-auto">
+          <button
+            onclick="exportPDF()"
+            id="export-btn"
+            class="w-full bg-brand-600 hover:bg-brand-500 text-white font-bold py-3 px-4 rounded-xl text-sm flex items-center justify-center gap-2 transition shadow-lg shadow-brand-600/30"
+          >
+            <i class="fa-solid fa-file-pdf text-lg"></i> Export Labels PDF
+          </button>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="border-t border-brand-border text-center text-[10px] text-gray-500 py-3 px-4">
+    &copy; MysteryT &middot; ElectroSort v1.1.0 &middot; Not affiliated with any manufacturer &middot;
+    <button onclick="openLegal()" class="text-brand-500 hover:text-brand-400 underline">Legal Notice, Privacy &amp; Licenses</button>
+  </footer>
+
+  <!-- LEGAL MODAL -->
+  <div id="legal-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-brand-card border border-brand-border rounded-xl w-full max-w-2xl max-h-[85vh] overflow-y-auto p-6 shadow-2xl relative text-xs text-gray-300 leading-relaxed space-y-3">
+      <button onclick="closeLegal()" class="absolute top-4 right-4 text-gray-400 hover:text-white text-lg" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+      <h3 class="text-lg font-bold text-white">Legal Notice, Privacy &amp; Licenses</h3>
+      <div><b class="text-white">No warranty / safety.</b> This tool is provided "as is" for personal and educational organization of electronic parts. Specifications are simplified, typical or family-level values and may differ per manufacturer, series or variant. Always check the official datasheet before use. Do not rely on it for safety-critical, medical, automotive or mains-voltage design decisions. Placeholders marked <code>XX</code> must be filled in by you.</div>
+      <div><b class="text-white">Trademarks.</b> All product names, part numbers, logos and brands are the property of their respective owners and are used for identification only. ElectroSort is not affiliated with, sponsored or endorsed by any manufacturer. QR Code is a registered trademark of DENSO WAVE INCORPORATED.</div>
+      <div><b class="text-white">Datasheets &amp; links.</b> The app only links to manufacturer or distributor pages; no datasheet content, images or files are copied or hosted. Copyright of linked documents remains with their owners. Links may change or disappear over time. Official manufacturer links are used wherever available. Where none exists, an entry links to a part-number search on a third-party datasheet site (Alldatasheet.com) or, for boards and modules, a distributor site (Octopart). These third-party sites host documents they did not publish (copyright stays with the manufacturers), are ad-supported and may set their own cookies or tracking; they are not operated by or affiliated with ElectroSort, and their content may be outdated &ndash; verify against the manufacturer's document. Links are not a recommendation to buy from anyone. Every database entry has a link; generic <code>XX</code> templates link to a part-type search rather than a specific datasheet.</div>
+      <div><b class="text-white">Symbols.</b> Schematic symbols are simplified original drawings in the generic IEC/ANSI style created for this app.</div>
+      <div><b class="text-white">Privacy.</b> ElectroSort has no accounts, analytics, cookies or tracking and sends none of your data anywhere. Custom parts you add are stored only in your browser's localStorage (clear site data to remove them). The page loads open-source libraries from public CDNs (cdn.tailwindcss.com, cdnjs.cloudflare.com); those providers can see your IP address and browser details when the page loads. For full privacy, download the libraries and host them yourself. Fonts are system fonts &ndash; no Google Fonts are loaded.</div>
+      <div><b class="text-white">Open-source components.</b> Original ElectroSort code and symbols are MIT licensed. Tailwind CSS (MIT), Font Awesome Free (icons CC BY 4.0, fonts SIL OFL 1.1, code MIT), QRCode.js (MIT), html2canvas (MIT), jsPDF (MIT). See the repository's LICENSE and THIRD_PARTY_NOTICES.md.</div>
+      <div class="text-gray-500">&copy; MysteryT. This notice is general information, not legal advice. If you publish or distribute the app commercially, check the requirements that apply in your country.</div>
+    </div>
+  </div>
+
+  <!-- HIDDEN PDF RENDER AREA -->
+  <div id="pdf-render-area"></div>
+
+  <!-- ADD CUSTOM COMPONENT MODAL -->
+  <div id="add-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-brand-card border border-brand-border rounded-xl w-full max-w-md p-6 shadow-2xl relative">
+      <button onclick="closeAddModal()" class="absolute top-4 right-4 text-gray-400 hover:text-white text-lg">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+
+      <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+        <i class="fa-solid fa-microchip text-brand-500"></i> Add Custom Component
+      </h3>
+
+      <form id="add-component-form" onsubmit="saveCustomComponent(event)" class="space-y-3 text-xs">
+        <div>
+          <label class="block text-gray-300 font-medium mb-1">Part Name / Value *</label>
+          <input type="text" id="input-name" required placeholder="e.g. Resistor XX (SMD 0603), STM32F103" class="w-full bg-brand-dark border border-brand-border rounded-lg p-2.5 text-white focus:outline-none focus:border-brand-500">
+        </div>
+
+        <div>
+          <label class="block text-gray-300 font-medium mb-1">Category *</label>
+          <select id="input-category" class="w-full bg-brand-dark border border-brand-border rounded-lg p-2.5 text-white focus:outline-none focus:border-brand-500"></select>
+        </div>
+
+        <div>
+          <label class="block text-gray-300 font-medium mb-1">Schematic Symbol</label>
+          <select id="input-symbol" class="w-full bg-brand-dark border border-brand-border rounded-lg p-2.5 text-white focus:outline-none focus:border-brand-500"></select>
+        </div>
+
+        <div>
+          <label class="block text-gray-300 font-medium mb-1">Key Specs (Line or comma separated) *</label>
+          <textarea id="input-specs" required rows="3" placeholder="e.g. 1/4W 0.25W Metal Film&#10;Package: Axial / 0805" class="w-full bg-brand-dark border border-brand-border rounded-lg p-2.5 text-white focus:outline-none focus:border-brand-500"></textarea>
+        </div>
+
+        <div>
+          <label class="block text-gray-300 font-medium mb-1">Datasheet or Product URL <span class="text-gray-500">(optional &ndash; empty = no QR code)</span></label>
+          <input type="url" id="input-url" pattern="https?://.+" placeholder="https://..." class="w-full bg-brand-dark border border-brand-border rounded-lg p-2.5 text-white focus:outline-none focus:border-brand-500">
+        </div>
+
+        <div class="pt-3 flex gap-2">
+          <button type="button" onclick="closeAddModal()" class="w-1/2 bg-brand-dark border border-brand-border text-gray-300 hover:text-white py-2.5 rounded-lg font-medium transition">Cancel</button>
+          <button type="submit" class="w-1/2 bg-brand-600 hover:bg-brand-500 text-white py-2.5 rounded-lg font-bold transition">Save to Library</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- JAVASCRIPT APPLICATION LOGIC -->
+  <script>
+    // ---- SAFETY HELPERS ----
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    function safeUrl(u) {
+      try {
+        const x = new URL(String(u || '').trim());
+        return (x.protocol === 'https:' || x.protocol === 'http:') ? x.href : '';
+      } catch (e) { return ''; }
+    }
+    function safeSvg(s) {
+      s = String(s || '');
+      if (!/^\s*<svg[\s>]/i.test(s)) return '';
+      return s.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, '')
+              .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*')/gi, '').replace(/javascript:/gi, '');
+    }
+    function hasPlaceholder(s) { return /\bXX\b/.test(String(s || '')); }
+
+    // CLIPBOARD COPY HELPER FUNCTION
+    function copyToClipboard(text) {
+      const done = () => {
+        const toast = document.getElementById('toast-notification');
+        toast.innerText = `Copied "${text}" to clipboard!`;
+        toast.classList.remove('hidden');
+        setTimeout(() => toast.classList.add('hidden'), 1500);
+      };
+      const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); done(); } catch (e) { console.error(e); }
+        document.body.removeChild(ta);
+      };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(done).catch(fallback);
+      } else { fallback(); }
+    }
+
+    // COMPONENT DATABASE - Loaded dynamically from components.json
+    let defaultComponents = [];
+
+    // STATE VARIABLES
+    let components = [];
+    let printQueue = [];
+    let selectedCategory = 'all';
+
+    // STICKER SIZE SETTINGS
+    let stickerWidth = 62;
+    let stickerHeight = 86;
+    let useCustomSize = false;
+
+    function updateStickerSize() {
+      const select = document.getElementById('sticker-size-select');
+      const customControls = document.getElementById('custom-size-controls');
+      if (select.value === 'custom') {
+        useCustomSize = true;
+        customControls.classList.remove('hidden');
+        stickerWidth = parseFloat(document.getElementById('sticker-width').value) || 62;
+        stickerHeight = parseFloat(document.getElementById('sticker-height').value) || 86;
+      } else {
+        useCustomSize = false;
+        customControls.classList.add('hidden');
+        stickerWidth = 62;
+        stickerHeight = 86;
+      }
+    }
+
+    // LOAD COMPONENTS FROM EXTERNAL JSON FILE
+    async function loadComponentsFromFile() {
+      try {
+        const response = await fetch('components.json', { cache: 'no-cache' });
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        const data = await response.json();
+        if (!Array.isArray(data) || data.length === 0) throw new Error('Empty or invalid components.json');
+        defaultComponents = data;
+        return true;
+      } catch (e) {
+        console.warn('Could not load components.json automatically:', e.message);
+        return false;
+      }
+    }
+
+    // MANUAL JSON LOAD (works when launched from file://)
+    function loadJsonFromPicker(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result);
+          if (!Array.isArray(data) || data.length === 0) throw new Error('Not a valid array of components');
+          defaultComponents = data;
+          loadComponents(true);
+          buildFilters();
+          renderComponents();
+          updateStats();
+          document.getElementById('load-warning').classList.add('hidden');
+        } catch (err) {
+          alert('Invalid components.json format: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    // INITIALIZATION ON PAGE LOAD
+    window.addEventListener('DOMContentLoaded', async () => {
+      const ok = await loadComponentsFromFile();
+      loadComponents(ok);
+      buildFilters();
+      renderComponents();
+      updateStats();
+      updateStickerSize();
+      if (!ok && components.length === 0) {
+        document.getElementById('load-warning').classList.remove('hidden');
+      }
+    });
+
+    // MERGE JSON FILE AND LOCALSTORAGE CUSTOM PARTS
+    function loadComponents(fromFile) {
+      let storedCustoms = [];
+      try {
+        const raw = JSON.parse(localStorage.getItem('component_studio_library') || '[]');
+        if (Array.isArray(raw)) {
+          storedCustoms = raw.filter(c => c && typeof c.id === 'string' && c.id.startsWith('custom-'));
+        }
+      } catch (e) {
+        storedCustoms = [];
+      }
+
+      if (defaultComponents.length > 0) {
+        components = [...defaultComponents, ...storedCustoms];
+      } else {
+        components = storedCustoms;
+      }
+      saveComponentsToStorage();
+    }
+
+    function saveComponentsToStorage() {
+      try {
+        const customsOnly = components.filter(c => c && typeof c.id === 'string' && c.id.startsWith('custom-'));
+        localStorage.setItem('component_studio_library', JSON.stringify(customsOnly));
+      } catch (e) { console.warn('localStorage unavailable:', e.message); }
+    }
+
+    // CATEGORY PILLS + SYMBOL / CATEGORY SELECTS (built from the data)
+    const PILL_ON = "category-btn active px-3 py-1 rounded-full bg-brand-500 text-white font-medium transition";
+    const PILL_OFF = "category-btn px-3 py-1 rounded-full bg-brand-dark border border-brand-border text-gray-400 hover:text-white transition";
+    const SYMBOL_LABELS = {res:'Resistor',cap:'Capacitor',ecap:'Polarized capacitor',ind:'Inductor',bead:'Ferrite bead',dio:'Diode',sch:'Schottky diode',zen:'Zener diode',led:'LED',npn:'NPN transistor',pnp:'PNP transistor',nmos:'N-MOSFET',pmos:'P-MOSFET',ic:'IC / module (generic)',reg:'Voltage regulator',opamp:'Op-amp',xtal:'Crystal',fuse:'Fuse',sw:'Switch',pot:'Potentiometer',ntc:'Thermistor',ldr:'Photoresistor',bridge:'Bridge rectifier',conn:'Connector'};
+
+    function buildFilters() {
+      const cats = [...new Set(components.map(c => c.category).filter(Boolean))];
+      const pills = document.getElementById('category-pills');
+      pills.innerHTML = '';
+      ['all', ...cats].forEach(cat => {
+        const b = document.createElement('button');
+        b.dataset.cat = cat;
+        b.textContent = cat === 'all' ? 'All' : cat;
+        b.className = cat === selectedCategory ? PILL_ON : PILL_OFF;
+        b.addEventListener('click', () => setCategoryFilter(cat));
+        pills.appendChild(b);
+      });
+      const defaults = ['Passive','Diode','Transistor','IC','Microcontroller','Module','Sensor','Electromechanical','Other'];
+      const catSel = document.getElementById('input-category');
+      const all = [...new Set([...defaults, ...cats])];
+      catSel.innerHTML = all.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('');
+      const symSel = document.getElementById('input-symbol');
+      const syms = [...new Set(components.map(c => c.symbol).filter(Boolean))];
+      symSel.innerHTML = '<option value="">Auto (generic IC)</option>' + syms.map(s => `<option value="${esc(s)}">${esc(SYMBOL_LABELS[s] || s)}</option>`).join('');
+    }
+
+    // RENDER MAIN COMPONENT LIST
+    function renderComponents() {
+      const grid = document.getElementById('component-grid');
+      const terms = document.getElementById('search-input').value.toLowerCase().split(/\s+/).filter(Boolean);
+      grid.innerHTML = '';
+
+      const filtered = components.filter(c => {
+        if (!(selectedCategory === 'all' || c.category === selectedCategory)) return false;
+        const hay = [c.name, c.specs, c.category, c.package, c.description].join(' ').toLowerCase();
+        return terms.every(t => hay.includes(t));
+      });
+
+      if (filtered.length === 0) {
+        grid.innerHTML = `
+          <div class="col-span-full bg-brand-card p-8 rounded-xl border border-brand-border text-center text-gray-500">
+            <i class="fa-solid fa-box-open text-3xl mb-2 text-gray-600"></i>
+            <p class="text-sm">No components found matching your filter.</p>
+          </div>
+        `;
+        updateStats();
+        return;
+      }
+
+      filtered.forEach(comp => {
+        const card = document.createElement('div');
+        card.className = "bg-brand-card p-4 rounded-xl border border-brand-border flex flex-col justify-between hover:border-brand-500/50 transition group";
+        const url = safeUrl(comp.url);
+        const sym = safeSvg(comp.schematic) || getSchematicSVG(comp.category, comp.name);
+        const isCustom = String(comp.id).startsWith('custom-');
+
+        card.innerHTML = `
+          <div>
+            <div class="flex items-start justify-between gap-2 mb-2">
+              <h3 class="font-bold text-white text-base group-hover:text-brand-500 transition">${esc(comp.name)}</h3>
+              <span class="text-[10px] font-semibold px-2 py-0.5 rounded bg-brand-dark border border-brand-border text-brand-500 shrink-0">${esc(comp.category)}</span>
+            </div>
+            <div class="flex gap-3 items-start mb-3">
+              <div class="bg-white rounded-md p-1 w-16 h-11 shrink-0 flex items-center justify-center [&>svg]:w-full [&>svg]:h-full">${sym}</div>
+              <p class="text-xs text-gray-400 font-mono whitespace-pre-line leading-relaxed">${esc(comp.specs)}</p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2 pt-2 border-t border-brand-border/60">
+            ${url ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer" class="text-xs text-gray-400 hover:text-white p-2 rounded-lg bg-brand-dark border border-brand-border transition" title="Open datasheet / product link"><i class="fa-solid fa-arrow-up-right-from-square"></i></a>` : ''}
+            ${isCustom ? `<button data-del="${esc(comp.id)}" class="text-xs text-red-400 hover:text-red-300 p-2 rounded-lg bg-brand-dark border border-brand-border transition" title="Delete custom part"><i class="fa-solid fa-trash-can"></i></button>` : ''}
+            <button data-add="${esc(comp.id)}"
+              class="flex-1 bg-brand-dark hover:bg-brand-600 border border-brand-border hover:border-brand-600 text-white text-xs font-semibold py-2 px-3 rounded-lg flex items-center justify-center gap-1.5 transition">
+              <i class="fa-solid fa-cart-plus"></i> Add to Queue
+            </button>
+          </div>
+        `;
+        card.querySelector('[data-add]').addEventListener('click', () => addToQueue(comp.id));
+        const del = card.querySelector('[data-del]');
+        if (del) del.addEventListener('click', () => deleteCustom(comp.id));
+        grid.appendChild(card);
+      });
+
+      updateStats();
+    }
+
+    function deleteCustom(id) {
+      if (!confirm('Delete this custom part from your library?')) return;
+      components = components.filter(c => c.id !== id);
+      saveComponentsToStorage();
+      buildFilters();
+      renderComponents();
+    }
+
+    // CATEGORY FILTER SELECTION
+    function setCategoryFilter(category) {
+      selectedCategory = category;
+      document.querySelectorAll('.category-btn').forEach(btn => {
+        btn.className = btn.dataset.cat === category ? PILL_ON : PILL_OFF;
+      });
+      renderComponents();
+    }
+
+    function filterComponents() {
+      renderComponents();
+    }
+
+    // QUEUE MANAGEMENT & LIVE NAME/SPECS EDITING
+    function addToQueue(compKey) {
+      const comp = components.find(c => c.id === compKey);
+      if (!comp) return;
+
+      const queueId = 'q-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
+
+      printQueue.push({
+        queueId: queueId,
+        id: comp.id,
+        name: comp.name,
+        category: comp.category,
+        specs: comp.specs,
+        url: safeUrl(comp.url),
+        schematic: safeSvg(comp.schematic),
+        quantity: 1
+      });
+
+      renderQueue();
+    }
+
+    function updateQueueQuantity(queueId, delta) {
+      const item = printQueue.find(q => q.queueId === queueId);
+      if (!item) return;
+
+      item.quantity += delta;
+      if (item.quantity <= 0) {
+        printQueue = printQueue.filter(q => q.queueId !== queueId);
+      }
+      renderQueue();
+    }
+
+    function markXX(el) {
+      const warn = hasPlaceholder(el.value);
+      el.classList.toggle('border-yellow-400', warn);
+      el.classList.toggle('border-brand-border', !warn);
+    }
+
+    function updateQueueName(queueId, newName, el) {
+      const item = printQueue.find(q => q.queueId === queueId);
+      if (item) { item.name = newName; }
+      if (el) markXX(el);
+    }
+
+    function updateQueueSpecs(queueId, newSpecs, el) {
+      const item = printQueue.find(q => q.queueId === queueId);
+      if (item) { item.specs = newSpecs; }
+      if (el) markXX(el);
+    }
+
+    function clearQueue() {
+      printQueue = [];
+      renderQueue();
+    }
+
+    // RENDER QUEUE CARDS & PREVIEW QR CODES WITH LIVE EDITABLE NAME & SPECS
+    function renderQueue() {
+      const container = document.getElementById('queue-container');
+      container.innerHTML = '';
+
+      if (printQueue.length === 0) {
+        container.innerHTML = `
+          <div class="bg-brand-dark/50 border border-dashed border-brand-border rounded-xl p-6 text-center text-gray-500 text-xs">
+            <i class="fa-solid fa-tags text-2xl mb-2 text-gray-600"></i>
+            <p>Your print queue is empty.</p>
+            <p class="text-[10px] mt-1 text-gray-600">Add components from the library to build your sticker grid sheet.</p>
+          </div>
+        `;
+        updateStats();
+        return;
+      }
+
+      printQueue.forEach((item, index) => {
+        const queueCard = document.createElement('div');
+        queueCard.className = "bg-brand-dark p-3 rounded-xl border border-brand-border space-y-2.5";
+
+        const qrId = `preview-qr-${item.queueId}`;
+
+        queueCard.innerHTML = `
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2 overflow-hidden">
+              ${item.url ? `<div id="${qrId}" class="bg-white p-1 rounded shrink-0 flex items-center justify-center w-10 h-10"></div>` : `<div class="w-10 h-10 shrink-0 rounded border border-dashed border-brand-border flex items-center justify-center text-[8px] text-gray-500 text-center leading-tight">no QR</div>`}
+              <div class="truncate">
+                <span class="text-[10px] text-brand-500 font-semibold">${esc(item.category)}</span>
+              </div>
+            </div>
+
+            <div class="flex items-center bg-brand-card border border-brand-border rounded-md shrink-0">
+              <button onclick="updateQueueQuantity('${item.queueId}', -1)" class="px-2 py-1 text-gray-400 hover:text-white text-xs">-</button>
+              <span class="px-2 py-1 text-xs font-mono font-bold text-white">${item.quantity}</span>
+              <button onclick="updateQueueQuantity('${item.queueId}', 1)" class="px-2 py-1 text-gray-400 hover:text-white text-xs">+</button>
+            </div>
+          </div>
+
+          <!-- Live Editable Part Name & Specs / Note Modifiers -->
+          <div class="space-y-2 pt-1 border-t border-brand-border/40 text-[10px]">
+            <div>
+              <label class="text-gray-400 block mb-0.5">Part Name: <span class="text-yellow-400">(replace every XX with a value)</span></label>
+              <input
+                type="text"
+                value="${esc(item.name)}"
+                oninput="updateQueueName('${item.queueId}', this.value, this)"
+                class="w-full bg-brand-card border ${hasPlaceholder(item.name) ? 'border-yellow-400' : 'border-brand-border'} text-white rounded px-2 py-1 focus:outline-none focus:border-brand-500 font-mono text-[10px]"
+              />
+            </div>
+            <div>
+              <label class="text-gray-400 block mb-0.5">Specs / Note:</label>
+              <textarea
+                rows="2"
+                oninput="updateQueueSpecs('${item.queueId}', this.value, this)"
+                class="w-full bg-brand-card border ${hasPlaceholder(item.specs) ? 'border-yellow-400' : 'border-brand-border'} text-white rounded px-2 py-1.5 focus:outline-none focus:border-brand-500 font-mono text-[10px] leading-relaxed resize-y"
+              >${esc(item.specs)}</textarea>
+            </div>
+          </div>
+        `;
+
+        container.appendChild(queueCard);
+
+        // Render QR Code preview
+        setTimeout(() => {
+          const qrElement = document.getElementById(qrId);
+          if (qrElement) {
+            qrElement.innerHTML = '';
+            new QRCode(qrElement, {
+              text: item.url,
+              width: 36,
+              height: 36,
+              correctLevel: QRCode.CorrectLevel.M
+            });
+          }
+        }, 10);
+      });
+
+      updateStats();
+    }
+
+    // UPDATE TOP STAT COUNTERS
+    function updateStats() {
+      document.getElementById('stat-total-parts').innerText = components.length;
+      const totalQueueCount = printQueue.reduce((acc, curr) => acc + curr.quantity, 0);
+      document.getElementById('stat-queue-items').innerText = totalQueueCount;
+    }
+
+    // SYMBOL FALLBACK (only used for parts without their own schematic)
+    function getSchematicSVG() {
+      return '<svg viewBox="0 0 60 40" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="4" width="28" height="32"/><path d="M6 10H16M6 20H16M6 30H16M44 10H54M44 20H54M44 30H54"/><circle cx="20" cy="8" r="1.3" fill="#000"/></svg>';
+    }
+
+    // PDF EXPORT WITH COMPACT QR CODE
+    async function exportPDF() {
+      if (printQueue.length === 0) {
+        alert("Please add at least one component to the print queue first!");
+        return;
+      }
+
+      const open = printQueue.filter(q => hasPlaceholder(q.name) || hasPlaceholder(q.specs));
+      if (open.length > 0 && !confirm(open.length + ' label(s) in the queue still contain the placeholder "XX". Export anyway?')) {
+        return;
+      }
+
+      updateStickerSize();
+
+      const btn = document.getElementById('export-btn');
+      const originalText = btn.innerHTML;
+      btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Generating PDF...`;
+      btn.disabled = true;
+
+      const renderArea = document.getElementById('pdf-render-area');
+      renderArea.innerHTML = '';
+
+      // Expand queue items by quantity
+      const queueList = [];
+      printQueue.forEach(item => {
+        for (let i = 0; i < item.quantity; i++) {
+          queueList.push({ ...item });
+        }
+      });
+
+      // Calculate grid constraints
+      const pageWidthMM = 210;
+      const pageHeightMM = 297;
+      const paddingH = 16;
+      const paddingV = 20;
+      const gapMM = 2;
+
+      const availWidth = pageWidthMM - paddingH;
+      const availHeight = pageHeightMM - paddingV;
+
+      let cols = Math.floor((availWidth + gapMM) / (stickerWidth + gapMM));
+      let rows = Math.floor((availHeight + gapMM) / (stickerHeight + gapMM));
+
+      if (cols < 1) cols = 1;
+      if (rows < 1) rows = 1;
+
+      const itemsPerPage = cols * rows;
+      const marginH = paddingH / 2;
+      const marginV = paddingV / 2;
+
+      // Sizing off-screen capture container to single label size
+      renderArea.style.width = stickerWidth + 'mm';
+      renderArea.style.height = stickerHeight + 'mm';
+
+      // Split queue into pages
+      const pages = [];
+      for (let i = 0; i < queueList.length; i += itemsPerPage) {
+        pages.push(queueList.slice(i, i + itemsPerPage));
+      }
+
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      try {
+        const renderSessionId = Date.now();
+
+        for (let pageIdx = 0; pageIdx < pages.length; pageIdx++) {
+          if (pageIdx > 0) {
+            pdf.addPage();
+          }
+
+          const currentPageItems = pages[pageIdx];
+
+          for (let index = 0; index < currentPageItems.length; index++) {
+            const item = currentPageItems[index];
+
+            const labelDiv = document.createElement('div');
+            labelDiv.className = 'printable-label';
+            labelDiv.style.width = stickerWidth + 'mm';
+            labelDiv.style.height = stickerHeight + 'mm';
+
+            const qrContainerId = `pdf-qr-${renderSessionId}-${pageIdx}-${index}`;
+            const qrSize = Math.min(stickerWidth * 0.22, stickerHeight * 0.22, 14);
+            const titleSize = Math.max(7, Math.min(13, stickerWidth * 0.17));
+            const catSize = Math.max(5.5, Math.min(9, stickerWidth * 0.12));
+            const specsSize = Math.max(4.5, Math.min(7.5, stickerWidth * 0.105));
+            const footerSize = Math.max(4, Math.min(6.5, stickerWidth * 0.085));
+
+            const rawSym = safeSvg(item.schematic) || getSchematicSVG();
+            const symSvg = rawSym.includes('xmlns=')
+              ? rawSym.replace('<svg ', '<svg preserveAspectRatio="xMidYMid meet" ')
+              : rawSym.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" ');
+
+            labelDiv.innerHTML = `
+              <div style="display: flex; flex-direction: column; height: 100%;">
+                <div class="label-header">
+                  <div class="label-title" style="font-size: ${titleSize}pt;">${esc(item.name)}</div>
+                  <div class="label-category" style="font-size: ${catSize}pt;">${esc(item.category)}</div>
+                </div>
+                <div class="sym-wrap">${symSvg}</div>
+                <div class="label-specs" style="font-size: ${specsSize}pt;">${esc(item.specs)}</div>
+                <div class="label-footer">
+                  <div class="label-footer-info" style="font-size: ${footerSize}pt; color: #333; line-height: 1.12;">
+                    ${item.url ? '<div>SCAN QR → DATASHEET</div>' : ''}
+                    <div>ELECTROSORT</div>
+                  </div>
+                  ${item.url ? `<div id="${qrContainerId}" style="display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: ${qrSize}mm; height: ${qrSize}mm;"></div>` : ''}
+                </div>
+              </div>
+            `;
+
+            renderArea.innerHTML = '';
+            renderArea.appendChild(labelDiv);
+
+            // Render crisp, compact QR code
+            const qrEl = item.url ? document.getElementById(qrContainerId) : null;
+            if (qrEl) {
+              qrEl.innerHTML = '';
+              new QRCode(qrEl, {
+                text: item.url,
+                width: 128,
+                height: 128,
+                correctLevel: QRCode.CorrectLevel.M
+              });
+              const qcanvas = qrEl.querySelector('canvas');
+              if (qcanvas) {
+                qcanvas.style.width = qrSize + 'mm';
+                qcanvas.style.height = qrSize + 'mm';
+              }
+              const qimg = qrEl.querySelector('img');
+              if (qimg) {
+                qimg.style.width = qrSize + 'mm';
+                qimg.style.height = qrSize + 'mm';
+              }
+            }
+
+            await new Promise(r => setTimeout(r, 50));
+
+            // Capture label image
+            const canvas = await html2canvas(labelDiv, {
+              scale: 3,
+              useCORS: true,
+              logging: false,
+              backgroundColor: '#ffffff'
+            });
+
+            const imgData = canvas.toDataURL('image/jpeg', 0.98);
+
+            const col = index % cols;
+            const row = Math.floor(index / cols);
+            const x = marginH + col * (stickerWidth + gapMM);
+            const y = marginV + row * (stickerHeight + gapMM);
+            pdf.addImage(imgData, 'JPEG', x, y, stickerWidth, stickerHeight);
+          }
+        }
+
+        pdf.save(`ElectroSort_Labels_${Date.now()}.pdf`);
+
+      } catch (err) {
+        console.error("PDF Export Error:", err);
+        alert("An error occurred while generating the PDF. Please try again.");
+      } finally {
+        renderArea.innerHTML = '';
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+      }
+    }
+
+    // ADD CUSTOM COMPONENT MODAL LOGIC
+    function openAddModal() {
+      document.getElementById('add-modal').classList.remove('hidden');
+    }
+
+    function closeAddModal() {
+      document.getElementById('add-modal').classList.add('hidden');
+      document.getElementById('add-component-form').reset();
+    }
+
+    function openLegal() { document.getElementById('legal-modal').classList.remove('hidden'); }
+    function closeLegal() { document.getElementById('legal-modal').classList.add('hidden'); }
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { closeLegal(); closeAddModal(); }
+    });
+
+    function saveCustomComponent(event) {
+      event.preventDefault();
+
+      const rawUrl = document.getElementById('input-url').value.trim();
+      const url = rawUrl ? safeUrl(rawUrl) : '';
+      if (rawUrl && !url) { alert('Please enter a valid http(s) URL or leave it empty.'); return; }
+      const symKey = document.getElementById('input-symbol').value;
+      const src = components.find(c => c.symbol === symKey && c.schematic);
+
+      const newComp = {
+        id: 'custom-' + Date.now(),
+        name: document.getElementById('input-name').value.trim(),
+        category: document.getElementById('input-category').value,
+        specs: document.getElementById('input-specs').value.trim(),
+        url: url,
+        symbol: symKey,
+        schematic: src ? src.schematic : ''
+      };
+
+      components.unshift(newComp);
+      saveComponentsToStorage();
+      buildFilters();
+      renderComponents();
+      closeAddModal();
+    }
+  </script>
+</body>
+</html>
